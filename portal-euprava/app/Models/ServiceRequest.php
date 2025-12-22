@@ -4,9 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class ServiceRequest extends Model
 {
+    use HasFactory;
     // Pretpostavka: user_id, service_id, processed_by, status, citizen_note, officer_note,
     // attachment, form_data, payment_status, payment_date.
     protected $fillable = [
