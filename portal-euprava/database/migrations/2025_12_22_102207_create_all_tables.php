@@ -68,7 +68,7 @@ return new class extends Migration
             // No FK constraints here, they will be added in add_foreign_keys.
             $table->unsignedBigInteger('user_id')->index();       // citizen.
             $table->unsignedBigInteger('service_id')->index();    // service.
-            $table->unsignedBigInteger('processed_by')->index();  // officer, will become nullable later.
+            $table->unsignedBigInteger('processed_by')->nullable()->index();  // officer, will become nullable later.
 
             $table->string('status'); // Default added later.
 
