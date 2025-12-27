@@ -6,6 +6,9 @@ use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ServiceFieldController;
 use App\Http\Controllers\ServiceRequestController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ServiceRequestPdfController;
+use App\Http\Controllers\StatisticsController;
+use App\Http\Controllers\FileUploadController;
 use Illuminate\Support\Facades\Route;
 
 // Auth (PUBLIC).
@@ -49,4 +52,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users/{user}', [UserController::class, 'show']); // GET
     Route::patch('/users/{user}/role', [UserController::class, 'updateRole']); // PATCH
     Route::delete('/users/{user}', [UserController::class, 'destroy']); // DELETE
+
+    // PDF export jednog zahteva.
+    Route::get('/service-requests/{serviceRequest}/pdf', [ServiceRequestPdfController::class, 'download']);
+
+    // Statistika i metrike.
+    Route::get('/stats', [StatisticsController::class, 'index']);
+
+    Route::post('/uploads/filebin', [FileUploadController::class, 'filebin']);
 });
