@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'filebin' => [
+        'base_url' => env('FILEBIN_BASE_URL', 'https://filebin.net'),
+        'bin' => env('FILEBIN_BIN', 'portal-euprava'),
+    ],
+
 ];
