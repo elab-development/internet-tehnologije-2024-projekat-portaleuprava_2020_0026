@@ -15,14 +15,16 @@ import {
   Text,
   Title,
   Box,
+  Divider,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconDownload, IconRefresh, IconCheck } from "@tabler/icons-react";
+import { IconDownload, IconRefresh, IconCheck, IconExternalLink } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 
 import api from "../api/api";
 import { getAuth, getRoleLabel } from "../utils/auth";
 import Slider from "../components/Slider";
+import useLatestSerbianNews from "../hooks/useLatestSerbianNews";
 
 const NAVY = "#0B1F3B";
 
@@ -42,6 +44,13 @@ function StatusBadge({ status }) {
   );
 }
 
+function fmtDate(d) {
+  if (!d) return "-";
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return String(d);
+  return dt.toLocaleString();
+}
+
 export default function HomeCitizen() {
   const navigate = useNavigate();
   const auth = getAuth();
@@ -53,6 +62,14 @@ export default function HomeCitizen() {
 
   const quickServices = useMemo(() => services.slice(0, 4), [services]);
   const lastRequests = useMemo(() => requests.slice(0, 5), [requests]);
+
+  // ✅ Latest news hook.
+  const {
+    news,
+    loading: newsLoading,
+    error: newsError,
+    refetch: refetchNews,
+  } = useLatestSerbianNews({ limit: 6 });
 
   const load = async () => {
     setLoading(true);
@@ -76,7 +93,7 @@ export default function HomeCitizen() {
     // eslint-disable-next-line
   }, []);
 
-  // ✅ PDF download preko axios-a (sa auth headerom)
+  // ✅ PDF download preko axios-a (sa auth headerom).
   const downloadPdf = async (requestId) => {
     try {
       const res = await api.get(`/service-requests/${requestId}/pdf`, {
@@ -114,7 +131,7 @@ export default function HomeCitizen() {
     }
   };
 
-  // ✅ Pokreni zahtev -> vodi na stranicu za novi zahtev (+ serviceId opcionalno)
+  // ✅ Pokreni zahtev -> vodi na stranicu za novi zahtev (+ serviceId opcionalno).
   const startRequest = (serviceId) => {
     navigate(`/citizen/new-request?serviceId=${serviceId}`);
   };
@@ -238,17 +255,72 @@ export default function HomeCitizen() {
                         </Card>
                       </SimpleGrid>
 
+                      {/* ✅ NAJNOVIJE VESTI */}
+                      <Card withBorder radius="xl" p="lg">
+                        <Group justify="space-between" mb="sm">
+                          <Title order={4} c={NAVY}>
+                            Najnovije vesti (Srbija).
+                          </Title>
+
+                          <Button variant="light" color="blue" radius="xl" onClick={refetchNews}>
+                            Osveži.
+                          </Button>
+                        </Group>
+
+                        {newsLoading ? (
+                          <Group justify="center" py={14}>
+                            <Loader size="sm" />
+                          </Group>
+                        ) : newsError ? (
+                          <Text c="dimmed">{newsError}</Text>
+                        ) : news.length === 0 ? (
+                          <Text c="dimmed">Trenutno nema vesti za prikaz.</Text>
+                        ) : (
+                          <Stack gap="sm">
+                            {news.map((n, idx) => (
+                              <Card key={n.url ?? idx} withBorder radius="xl" p="md">
+                                <Group justify="space-between" align="flex-start">
+                                  <Box style={{ flex: 1 }}>
+                                    <Text fw={800} c={NAVY} lineClamp={2}>
+                                      {n.title}.
+                                    </Text>
+                                    <Text c="dimmed" size="sm" mt={4}>
+                                      Izvor: {n.source}. • {fmtDate(n.publishedAt)}.
+                                    </Text>
+                                  </Box>
+
+                                  <ActionIcon
+                                    variant="light"
+                                    color="blue"
+                                    radius="xl"
+                                    component="a"
+                                    href={n.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    aria-label="open"
+                                  >
+                                    <IconExternalLink size={18} />
+                                  </ActionIcon>
+                                </Group>
+                              </Card>
+                            ))}
+                          </Stack>
+                        )}
+
+                        <Divider my="md" />
+
+                        <Text size="sm" c="dimmed">
+                          Vesti se preuzimaju sa javnog izvora (GDELT). Naslovi mogu biti iz različitih medija.
+                        </Text>
+                      </Card>
+
                       {/* SERVISI */}
                       <Card withBorder radius="xl" p="lg">
                         <Group justify="space-between" mb="sm">
                           <Title order={4} c={NAVY}>
                             Servisi.
                           </Title>
-                          <Button
-                            variant="subtle"
-                            color="blue"
-                            onClick={() => navigate("/citizen/services")}
-                          >
+                          <Button variant="subtle" color="blue" onClick={() => navigate("/citizen/services")}>
                             Prikaži sve.
                           </Button>
                         </Group>
@@ -289,11 +361,7 @@ export default function HomeCitizen() {
                           <Title order={4} c={NAVY}>
                             Moji zahtevi.
                           </Title>
-                          <Button
-                            variant="subtle"
-                            color="blue"
-                            onClick={() => navigate("/citizen/requests")}
-                          >
+                          <Button variant="subtle" color="blue" onClick={() => navigate("/citizen/requests")}>
                             Prikaži sve.
                           </Button>
                         </Group>
