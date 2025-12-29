@@ -35,7 +35,7 @@ import {
   IconUpload,
   IconX,
 } from "@tabler/icons-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import api from "../api/api";
 import Slider from "../components/Slider";
@@ -43,27 +43,111 @@ import Slider from "../components/Slider";
 const NAVY = "#0B1F3B";
 
 /**
- * FieldRenderer radi sa field shape-om iz backend-a:
- * field = { id, label, name, type, required, options[] }
+ * Backend može vratiti polja u različitim oblicima:
+ * - { id, name, type, label, required, options }
+ * - ili (kao u seederu) { id, key, data_type, options, required }
  *
- * VAŽNO:
- * - Da se ne bi desilo da se 2 različita polja "prepišu" (npr. broj kopija i način dostave),
- *   state mapiramo po UNIQUE ključu: field.id (fallback: field.name).
- * - Backend u form_data i dalje šaljemo kao objekat po field.name (jer tvoj controller očekuje array),
- *   ali interno koristimo mapu po id-u, pa je UI stabilan.
+ * Ovaj fajl normalizuje sve u jedinstven format u UI.
  */
 
-function toYmd(date) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+function normalizeField(field) {
+  const name = field?.name ?? field?.key ?? "";
+  const typeRaw = field?.type ?? field?.data_type ?? field?.dataType ?? "STRING";
+
+  const type = String(typeRaw).toLowerCase(); // string/number/date/boolean/select/file...
+  const label = field?.label ?? field?.title ?? name;
+  const required = Boolean(field?.required ?? field?.is_required ?? field?.mandatory ?? false);
+
+  let options = field?.options ?? field?.values ?? [];
+  if (typeof options === "string") {
+    // Ako backend vrati JSON string.
+    try {
+      options = JSON.parse(options);
+    } catch {
+      options = options
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
+    }
+  }
+  if (!Array.isArray(options)) options = [];
+
+  return {
+    ...field,
+    _uiName: name,
+    _uiType: type,
+    _uiLabel: label,
+    _uiRequired: required,
+    _uiOptions: options,
+  };
+}
+
+function getFieldKey(f) {
+  // Unikatan ključ da se polja ne prepisuju.
+  return String(f?.id ?? f?._uiName ?? f?.name ?? f?.key);
+}
+
+function safeParseDate(value) {
+  if (!value) return null;
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    // Ako je "YYYY-MM-DD" ili ISO.
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function toYmd(value) {
+  if (!value) return null;
+
+  // Ako je već string, vrati prvih 10 karaktera (YYYY-MM-DD).
+  if (typeof value === "string") {
+    return value.slice(0, 10);
+  }
+
+  // Ako je Date.
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const yyyy = value.getFullYear();
+    const mm = String(value.getMonth() + 1).padStart(2, "0");
+    const dd = String(value.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // Fallback parse.
+  const d = new Date(value);
+  if (!Number.isNaN(d.getTime())) {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  return null;
 }
 
 function FieldRenderer({ field, value, onChange }) {
-  const type = String(field?.type || "text").toLowerCase();
-  const label = (field?.label || field?.name || "Polje") + ".";
-  const required = !!field?.required;
+  const type = String(field?._uiType || "string").toLowerCase();
+  const label = (field?._uiLabel || field?._uiName || "Polje") + ".";
+  const required = !!field?._uiRequired;
+
+  // FILE polja se ne renderuju kao klasično input polje, jer upload rešavamo kroz Dropzone.
+  if (type === "file") {
+    return (
+      <TextInput
+        label={label}
+        value={value ?? ""}
+        placeholder="Upload uradite u sekciji Prilog."
+        readOnly
+      />
+    );
+  }
 
   if (type === "textarea") {
     return (
@@ -79,9 +163,8 @@ function FieldRenderer({ field, value, onChange }) {
     );
   }
 
-  if (type === "number") {
-    // Mantine NumberInput vraća number | string | null (zavisi od verzije).
-    // Nama je OK da čuvamo number ili null.
+  // Backend ti može vratiti NUMBER ili "number".
+  if (type === "number" || type === "integer" || type === "float") {
     return (
       <NumberInput
         label={label}
@@ -95,14 +178,13 @@ function FieldRenderer({ field, value, onChange }) {
   }
 
   if (type === "date") {
-    const parsed = value ? new Date(value) : null;
-
+    const parsed = safeParseDate(value);
     return (
       <DatePickerInput
         label={label}
         placeholder="Izaberite datum."
         value={parsed}
-        onChange={(d) => (d ? onChange(toYmd(d)) : onChange(null))}
+        onChange={(v) => onChange(toYmd(v))}
         required={required}
         valueFormat="YYYY-MM-DD"
         clearable
@@ -111,7 +193,7 @@ function FieldRenderer({ field, value, onChange }) {
   }
 
   if (type === "select") {
-    const options = Array.isArray(field?.options) ? field.options : [];
+    const options = Array.isArray(field?._uiOptions) ? field._uiOptions : [];
     const data = options.map((o) =>
       typeof o === "string" ? { value: o, label: o } : o
     );
@@ -130,7 +212,7 @@ function FieldRenderer({ field, value, onChange }) {
     );
   }
 
-  if (type === "checkbox" || type === "boolean") {
+  if (type === "boolean" || type === "checkbox") {
     return (
       <Box>
         <Text fw={600} c={NAVY} size="sm" mb={6}>
@@ -145,6 +227,7 @@ function FieldRenderer({ field, value, onChange }) {
     );
   }
 
+  // Default string/text.
   return (
     <TextInput
       label={label}
@@ -158,6 +241,7 @@ function FieldRenderer({ field, value, onChange }) {
 
 export default function NewRequestCitizen() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -167,14 +251,14 @@ export default function NewRequestCitizen() {
   const [selectedService, setSelectedService] = useState(null);
 
   const [fieldsLoading, setFieldsLoading] = useState(false);
-  const [fields, setFields] = useState([]);
+  const [fields, setFields] = useState([]); // normalized fields
 
   const [citizenNote, setCitizenNote] = useState("");
 
-  // UI state: map by unique field key (id fallback name) to avoid "prepisivanje".
+  // State mapa po fieldKey da se polja ne prepisuju.
   const [valuesByKey, setValuesByKey] = useState({});
 
-  // Attachment link stored in DB.
+  // Attachment link (za DB).
   const [attachmentLink, setAttachmentLink] = useState(null);
   const [uploading, setUploading] = useState(false);
 
@@ -205,24 +289,27 @@ export default function NewRequestCitizen() {
     }
   };
 
-  const getFieldKey = (f) => String(f?.id ?? f?.name);
-
   const loadFields = async (serviceId) => {
     setFieldsLoading(true);
     try {
       const res = await api.get(`/services/${serviceId}/fields`);
-      const list = Array.isArray(res.data?.data) ? res.data.data : res.data ?? [];
+      const listRaw = Array.isArray(res.data?.data) ? res.data.data : res.data ?? [];
+
+      const list = (listRaw || []).map(normalizeField);
       setFields(list);
 
-      // Reset values and attachment when service changes.
       const initial = {};
       list.forEach((f) => {
         const key = getFieldKey(f);
-        const t = String(f.type || "text").toLowerCase();
-        initial[key] = t === "checkbox" || t === "boolean" ? false : "";
+        const t = String(f?._uiType || "string").toLowerCase();
+
+        if (t === "boolean" || t === "checkbox") initial[key] = false;
+        else initial[key] = "";
       });
 
       setValuesByKey(initial);
+
+      // Napomena i attachment reset po promeni servisa.
       setCitizenNote("");
       setAttachmentLink(null);
     } finally {
@@ -230,11 +317,33 @@ export default function NewRequestCitizen() {
     }
   };
 
+  // Helper: serviceId iz query string-a (?serviceId=3).
+  const getServiceIdFromQuery = () => {
+    const params = new URLSearchParams(location.search);
+    const sid = params.get("serviceId");
+    return sid ? String(sid) : null;
+  };
+
   useEffect(() => {
     loadServices();
     // eslint-disable-next-line
   }, []);
 
+  // Auto-select servis iz query kada se servisi učitaju.
+  useEffect(() => {
+    if (!services?.length) return;
+
+    const sid = getServiceIdFromQuery();
+    if (!sid) return;
+
+    if (String(selectedServiceId) === String(sid)) return;
+
+    const exists = services.some((s) => String(s.id) === String(sid));
+    if (exists) setSelectedServiceId(String(sid));
+    // eslint-disable-next-line
+  }, [services, location.search]);
+
+  // Kada se servis promeni -> load fields.
   useEffect(() => {
     if (!selectedServiceId) {
       setSelectedService(null);
@@ -247,13 +356,14 @@ export default function NewRequestCitizen() {
 
     const svc = services.find((s) => String(s.id) === String(selectedServiceId));
     setSelectedService(svc || null);
+
     loadFields(selectedServiceId);
     // eslint-disable-next-line
   }, [selectedServiceId]);
 
   const validateClientSide = () => {
     for (const f of fields) {
-      if (!f.required) continue;
+      if (!f?._uiRequired) continue;
 
       const key = getFieldKey(f);
       const v = valuesByKey?.[key];
@@ -267,7 +377,7 @@ export default function NewRequestCitizen() {
       if (empty) {
         notifications.show({
           title: "Greška.",
-          message: `Polje "${f.label || f.name}" je obavezno.`,
+          message: `Polje "${f?._uiLabel || f?._uiName}" je obavezno.`,
           color: "red",
         });
         return false;
@@ -276,24 +386,28 @@ export default function NewRequestCitizen() {
     return true;
   };
 
-  // Convert UI values (by key) -> payload form_data (by field.name).
+  // UI mapa (by key) -> payload form_data (by field name/key).
   const buildFormDataPayload = () => {
     const out = {};
+
     (fields || []).forEach((f) => {
-      const name = f?.name;
+      const name = f?._uiName;
       if (!name) return;
 
       const key = getFieldKey(f);
       let v = valuesByKey?.[key];
 
-      // Normalize number empty to null.
-      const t = String(f.type || "text").toLowerCase();
-      if (t === "number") {
+      const t = String(f?._uiType || "string").toLowerCase();
+
+      // Normalizacija.
+      if (t === "date") v = v ? String(v).slice(0, 10) : null;
+      if (t === "number" || t === "integer" || t === "float") {
         if (v === "" || v === undefined) v = null;
       }
 
       out[name] = v;
     });
+
     return out;
   };
 
@@ -308,10 +422,7 @@ export default function NewRequestCitizen() {
       });
 
       const link = res?.data?.link;
-
-      if (!link) {
-        throw new Error("Filebin nije vratio link.");
-      }
+      if (!link) throw new Error("Filebin nije vratio link.");
 
       setAttachmentLink(link);
 
@@ -389,7 +500,6 @@ export default function NewRequestCitizen() {
       <div style={{ flex: 1 }}>
         <div className="auth-page" style={{ padding: 0 }}>
           <Container size="lg" py={24} style={{ position: "relative", zIndex: 1 }}>
-            {/* Header */}
             <Paper
               radius="xl"
               p="lg"
@@ -443,7 +553,7 @@ export default function NewRequestCitizen() {
             </Paper>
 
             <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-              {/* Left: service selection + info */}
+              {/* Left */}
               <Paper
                 radius="xl"
                 p="lg"
@@ -505,7 +615,7 @@ export default function NewRequestCitizen() {
                 )}
               </Paper>
 
-              {/* Right: dynamic form */}
+              {/* Right */}
               <Paper
                 radius="xl"
                 p="lg"
@@ -533,14 +643,13 @@ export default function NewRequestCitizen() {
                       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                         {(fields || []).map((f) => {
                           const key = getFieldKey(f);
-                          const isTextarea = String(f.type || "").toLowerCase() === "textarea";
+                          const isTextarea =
+                            String(f?._uiType || "").toLowerCase() === "textarea";
 
                           return (
                             <Box
                               key={key}
-                              style={{
-                                gridColumn: isTextarea ? "1 / -1" : undefined,
-                              }}
+                              style={{ gridColumn: isTextarea ? "1 / -1" : undefined }}
                             >
                               <FieldRenderer
                                 field={f}
@@ -568,7 +677,7 @@ export default function NewRequestCitizen() {
                         </Text>
 
                         <Dropzone
-                          onDrop={(files) => uploadFile(files[0])}
+                          onDrop={(files) => files?.[0] && uploadFile(files[0])}
                           onReject={() =>
                             notifications.show({
                               title: "Greška.",
@@ -579,7 +688,12 @@ export default function NewRequestCitizen() {
                           maxSize={25 * 1024 * 1024}
                           multiple={false}
                           loading={uploading}
-                          accept={["application/pdf", "image/*", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]}
+                          accept={[
+                            "application/pdf",
+                            "image/*",
+                            "application/msword",
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                          ]}
                           styles={{
                             root: {
                               borderRadius: 16,
