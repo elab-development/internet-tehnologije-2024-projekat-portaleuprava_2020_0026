@@ -97,23 +97,24 @@ Sistem podržava generisanje i preuzimanje PDF-a za pojedinačne zahteve, dostup
 ---------------------------
 
 1. Klonirajte repozitorijum:
-bash
+```bash
     git clone https://github.com/elab-development/internet-tehnologije-2024-projekat-portaleuprava_2020_0026.git
+```
 
 2. Pokrenite backend:
-bash
+```bash
    cd portal-euprava
    composer install
    php artisan migrate:fresh --seed
    php artisan serve
-
+```
     
 3. Pokrenite frontend:
-bash
+```bash
    cd portal-euprava-frontend
    npm install
    npm start
-
+```
     
 4.  Frontend pokrenut na: [http://localhost:3000](http://localhost:3000) Backend API pokrenut na: [http://127.0.0.1:8000/api](http://127.0.0.1:8000/api)
 
