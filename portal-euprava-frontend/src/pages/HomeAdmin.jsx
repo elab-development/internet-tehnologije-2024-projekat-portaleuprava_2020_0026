@@ -86,10 +86,8 @@ export default function HomeAdmin() {
         >
           <Group justify="space-between" align="flex-start">
             <Group gap="sm">
-              <img src="/images/logo.png" alt="logo" style={{ width: 40, height: 40, objectFit: "contain" }} />
               <div>
                 <Title order={2} c={NAVY}>Admin – sistemski pregled.</Title>
-                <Text c="dimmed">Korisnik: {auth?.user?.name}.</Text>
               </div>
             </Group>
 
