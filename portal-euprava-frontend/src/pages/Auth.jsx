@@ -1,3 +1,4 @@
+// src/pages/Auth.jsx
 import React, { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { DatePicker } from "@mantine/dates";
@@ -18,17 +19,19 @@ import {
   Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import {
-  IconLock,
-  IconMail,
-  IconUser,
-  IconId,
-  IconCalendar,
-  IconCheck,
-} from "@tabler/icons-react";
+import { IconLock, IconMail, IconUser, IconId, IconCalendar, IconCheck } from "@tabler/icons-react";
 
 import api from "../api/api";
 import { saveAuth } from "../utils/auth";
+
+// Minimalno “očisti” email da ne šalje razmake / nevidljive znakove.
+const cleanEmail = (v) =>
+  String(v || "")
+    .trim()
+    .replace(/^mailto:/i, "")
+    .replace(/[\s\u00A0\u200B-\u200D\uFEFF]+/g, "") // whitespace + NBSP + zero-width
+    .replace(/[.,;:]+$/g, "") // ako se zalepi tačka na kraj
+    .toLowerCase();
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -71,19 +74,20 @@ export default function Auth() {
           message: "Molim vas izaberite datum rođenja.",
           color: "red",
         });
-        setRegLoading(false);
         return;
       }
 
       const payload = {
-        name: regName,
-        email: regEmail,
+        name: String(regName || "").trim(),
+        email: cleanEmail(regEmail),
         password: regPassword,
         date_of_birth: dayjs(regDob).format("YYYY-MM-DD"),
         jmbg: regJmbg,
       };
 
-      await api.post("/auth/register", payload);
+      await api.post("/auth/register", payload, {
+        headers: { "Content-Type": "application/json" },
+      });
 
       notifications.show({
         title: "Registracija uspešna.",
@@ -93,7 +97,7 @@ export default function Auth() {
       });
 
       setTab("login");
-      setLoginEmail(regEmail);
+      setLoginEmail(payload.email);
       setLoginPassword("");
       setRegPassword("");
     } catch (err) {
@@ -118,8 +122,14 @@ export default function Auth() {
     setLoginLoading(true);
 
     try {
-      const payload = { email: loginEmail, password: loginPassword };
-      const res = await api.post("/auth/login", payload);
+      const payload = {
+        email: cleanEmail(loginEmail),
+        password: loginPassword,
+      };
+
+      const res = await api.post("/auth/login", payload, {
+        headers: { "Content-Type": "application/json" },
+      });
 
       const token = res?.data?.token;
       const user = res?.data?.user;
@@ -141,7 +151,9 @@ export default function Auth() {
     } catch (err) {
       const msg =
         err?.response?.data?.message ||
-        "Neuspešna prijava. Proverite email i lozinku.";
+        (err?.response?.data?.errors
+          ? Object.values(err.response.data.errors).flat().join(" ")
+          : "Neuspešna prijava. Proverite email i lozinku.");
 
       notifications.show({
         title: "Greška.",
@@ -158,12 +170,10 @@ export default function Auth() {
       <div className="auth-shell">
         <div className="auth-left">
           <div className="brand-row">
-                <img className="brand-logo" src="/images/logo.png" alt="Portal eUprava logo" />
-                <br></br>
+            <img className="brand-logo" src="/images/logo.png" alt="Portal eUprava logo" />
+            <br />
             <div>
-              <div className="brand-subtitle">
-                Vaša veza sa državnom upravom, online svakog dana.
-              </div>
+              <div className="brand-subtitle">Vaša veza sa državnom upravom, online svakog dana.</div>
             </div>
           </div>
 
@@ -188,9 +198,7 @@ export default function Auth() {
 
           <Divider my="lg" />
 
-          <Text c="dimmed">
-            Savet. Posle registracije odmah se prijavite na nalog.
-          </Text>
+          <Text c="dimmed">Savet. Posle registracije odmah se prijavite na nalog.</Text>
         </div>
 
         <Paper className="auth-right" shadow="sm">
@@ -220,6 +228,7 @@ export default function Auth() {
                     placeholder="ime.prezime@mail.com."
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
+                    onBlur={() => setLoginEmail(cleanEmail(loginEmail))}
                     leftSection={<IconMail size={16} />}
                     required
                   />
@@ -266,6 +275,7 @@ export default function Auth() {
                     placeholder="ime.prezime@mail.com."
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
+                    onBlur={() => setRegEmail(cleanEmail(regEmail))}
                     leftSection={<IconMail size={16} />}
                     required
                   />
@@ -313,14 +323,11 @@ export default function Auth() {
                     </Popover.Dropdown>
                   </Popover>
 
-
                   <TextInput
                     label="JMBG."
                     placeholder="13 cifara."
                     value={regJmbg}
-                    onChange={(e) =>
-                      setRegJmbg(e.target.value.replace(/\D/g, "").slice(0, 13))
-                    }
+                    onChange={(e) => setRegJmbg(e.target.value.replace(/\D/g, "").slice(0, 13))}
                     leftSection={<IconId size={16} />}
                     required
                   />
