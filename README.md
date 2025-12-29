@@ -2,7 +2,7 @@
 
 **Portal eUprava** je web aplikacija koja digitalizuje osnovne administrativne usluge i omogućava građanima da podnose zahteve online, prate njihov status, preuzimaju dokumenta u PDF formatu i komuniciraju napomene vezane za obradu. Aplikacija je organizovana po ulogama korisnika (**CITIZEN**, **OFFICER**, **ADMIN**) i koristi jasan tok zahteva: kreiranje (DRAFT) → slanje (SUBMITTED) → obrada (IN_REVIEW) → ishod (APPROVED/REJECTED), uz podršku za takse i priloge.
 
-[Logo](./portal-euprava-frontend/public/images/logo.png) 
+![Logo](./portal-euprava-frontend/public/images/logo.png) 
 
 Sistem se oslanja na koncept **Servisa** (npr. izdavanje potvrde, podnošenje zahteva, različite eUsluge) koji pripadaju određenim **Institucijama**. Svaki servis ima dinamički definisana polja (Service Fields), koja određuju šta korisnik unosi u formu. Podaci koje korisnik unese čuvaju se u `form_data` kao objekt/mapa (ključ → vrednost), što omogućava univerzalnu podršku za različite vrste servisa bez potrebe da se unapred kodira svaka forma.
 
