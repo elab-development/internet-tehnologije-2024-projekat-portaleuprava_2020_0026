@@ -23,7 +23,6 @@ import {
   Textarea,
   Switch,
   NumberInput,
-  MultiSelect,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
@@ -135,6 +134,34 @@ export default function ServicesAdmin() {
   const [fOptionsRaw, setFOptionsRaw] = useState([]); // array of strings for SELECT
   const [fValidationRaw, setFValidationRaw] = useState([]); // array of strings/rules
 
+  // Draft inputs for "creatable" behavior (Mantine version-safe).
+  const [fOptionDraft, setFOptionDraft] = useState("");
+  const [fValidationDraft, setFValidationDraft] = useState("");
+
+  const addOption = (raw) => {
+    const v = String(raw ?? "").trim();
+    if (!v) return;
+    setFOptionsRaw((prev) => Array.from(new Set([...(safeArr(prev).map(String)), v])));
+    setFOptionDraft("");
+  };
+
+  const removeOption = (val) => {
+    const t = String(val);
+    setFOptionsRaw((prev) => safeArr(prev).map(String).filter((x) => x !== t));
+  };
+
+  const addValidationRule = (raw) => {
+    const v = String(raw ?? "").trim();
+    if (!v) return;
+    setFValidationRaw((prev) => Array.from(new Set([...(safeArr(prev).map(String)), v])));
+    setFValidationDraft("");
+  };
+
+  const removeValidationRule = (val) => {
+    const t = String(val);
+    setFValidationRaw((prev) => safeArr(prev).map(String).filter((x) => x !== t));
+  };
+
   // Helper: load all services
   const loadServices = async () => {
     setLoading(true);
@@ -160,7 +187,6 @@ export default function ServicesAdmin() {
       const res = await api.get("/institutions");
       setInstitutions(getListPayload(res));
     } catch (e) {
-      // If your backend restricts /institutions to ADMIN only, this page is admin so it should work.
       // ignore if fails
     }
   };
@@ -268,7 +294,6 @@ export default function ServicesAdmin() {
       notifications.show({ title: "Greška.", message: "Naziv servisa je obavezan.", color: "red" });
       return false;
     }
-    // institution_id might be required in your ServiceController store. If so, validate here.
     return true;
   };
 
@@ -380,6 +405,8 @@ export default function ServicesAdmin() {
     setFSortOrder(0);
     setFOptionsRaw([]);
     setFValidationRaw([]);
+    setFOptionDraft("");
+    setFValidationDraft("");
   };
 
   const closeFieldModal = () => {
@@ -430,6 +457,8 @@ export default function ServicesAdmin() {
     // options/validation_rules are arrays in backend
     setFOptionsRaw(safeArr(row?.options));
     setFValidationRaw(safeArr(row?.validation_rules));
+    setFOptionDraft("");
+    setFValidationDraft("");
   };
 
   const validateFieldCreate = () => {
@@ -452,7 +481,6 @@ export default function ServicesAdmin() {
       return false;
     }
 
-    // If type is SELECT, options should exist
     if (fType === "SELECT" && (!Array.isArray(fOptionsRaw) || fOptionsRaw.length === 0)) {
       notifications.show({
         title: "Greška.",
@@ -1051,13 +1079,7 @@ export default function ServicesAdmin() {
               />
 
               <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-                <NumberInput
-                  label="Taksa (RSD)."
-                  value={svcFee}
-                  onChange={setSvcFee}
-                  radius="xl"
-                  min={0}
-                />
+                <NumberInput label="Taksa (RSD)." value={svcFee} onChange={setSvcFee} radius="xl" min={0} />
 
                 <Select
                   label="Status."
@@ -1239,44 +1261,108 @@ export default function ServicesAdmin() {
               </SimpleGrid>
 
               {fType === "SELECT" && (
-                <MultiSelect
-                  label="Opcije (SELECT)."
-                  placeholder="Dodajte opcije."
-                  data={safeArr(fOptionsRaw).map((x) => ({ value: String(x), label: String(x) }))}
-                  value={safeArr(fOptionsRaw).map(String)}
-                  onChange={(vals) => setFOptionsRaw(vals)}
-                  searchable
-                  clearable
-                  radius="xl"
-                  creatable
-                  getCreateLabel={(q) => `+ Dodaj "${q}"`}
-                  onCreate={(q) => {
-                    const v = String(q).trim();
-                    if (!v) return null;
-                    setFOptionsRaw((prev) => Array.from(new Set([...(prev || []).map(String), v])));
-                    return v;
-                  }}
-                />
+                <>
+                  <Group align="end" gap="sm">
+                    <TextInput
+                      label="Opcije (SELECT)."
+                      placeholder="Unesite opciju i pritisnite Enter ili Dodaj."
+                      value={fOptionDraft}
+                      onChange={(e) => setFOptionDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addOption(fOptionDraft);
+                        }
+                      }}
+                      radius="xl"
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      radius="xl"
+                      color="blue"
+                      variant="light"
+                      leftSection={<IconPlus size={16} />}
+                      onClick={() => addOption(fOptionDraft)}
+                    >
+                      Dodaj.
+                    </Button>
+                  </Group>
+
+                  <Group gap="xs">
+                    {safeArr(fOptionsRaw).map((opt) => (
+                      <Badge
+                        key={String(opt)}
+                        variant="light"
+                        color="blue"
+                        rightSection={
+                          <ActionIcon
+                            size="xs"
+                            variant="subtle"
+                            color="gray"
+                            aria-label="remove-option"
+                            onClick={() => removeOption(opt)}
+                          >
+                            <IconX size={12} />
+                          </ActionIcon>
+                        }
+                      >
+                        {String(opt)}.
+                      </Badge>
+                    ))}
+                    {safeArr(fOptionsRaw).length === 0 && <Text size="sm" c="dimmed">Nema dodatih opcija.</Text>}
+                  </Group>
+                </>
               )}
 
-              <MultiSelect
-                label="Validation rules (opciono)."
-                placeholder='npr. "email", "min:6"'
-                data={safeArr(fValidationRaw).map((x) => ({ value: String(x), label: String(x) }))}
-                value={safeArr(fValidationRaw).map(String)}
-                onChange={(vals) => setFValidationRaw(vals)}
-                searchable
-                clearable
-                radius="xl"
-                creatable
-                getCreateLabel={(q) => `+ Dodaj "${q}"`}
-                onCreate={(q) => {
-                  const v = String(q).trim();
-                  if (!v) return null;
-                  setFValidationRaw((prev) => Array.from(new Set([...(prev || []).map(String), v])));
-                  return v;
-                }}
-              />
+              <Group align="end" gap="sm">
+                <TextInput
+                  label="Validation rules (opciono)."
+                  placeholder='npr. email, min:6'
+                  value={fValidationDraft}
+                  onChange={(e) => setFValidationDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addValidationRule(fValidationDraft);
+                    }
+                  }}
+                  radius="xl"
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  radius="xl"
+                  color="blue"
+                  variant="light"
+                  leftSection={<IconPlus size={16} />}
+                  onClick={() => addValidationRule(fValidationDraft)}
+                >
+                  Dodaj.
+                </Button>
+              </Group>
+
+              <Group gap="xs">
+                {safeArr(fValidationRaw).map((r) => (
+                  <Badge
+                    key={String(r)}
+                    variant="light"
+                    color="gray"
+                    rightSection={
+                      <ActionIcon
+                        size="xs"
+                        variant="subtle"
+                        color="gray"
+                        aria-label="remove-rule"
+                        onClick={() => removeValidationRule(r)}
+                      >
+                        <IconX size={12} />
+                      </ActionIcon>
+                    }
+                  >
+                    {String(r)}.
+                  </Badge>
+                ))}
+                {safeArr(fValidationRaw).length === 0 && <Text size="sm" c="dimmed">Nema dodatih pravila.</Text>}
+              </Group>
             </>
           )}
 
