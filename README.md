@@ -118,4 +118,4 @@ Sistem podržava generisanje i preuzimanje PDF-a za pojedinačne zahteve, dostup
     
 4.  Frontend pokrenut na: [http://localhost:3000](http://localhost:3000) Backend API pokrenut na: [http://127.0.0.1:8000/api](http://127.0.0.1:8000/api)
 
----
+---Ovo je test iz git basha
